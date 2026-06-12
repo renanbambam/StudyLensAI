@@ -1,0 +1,35 @@
+included:
+  - StudyLens
+  - StudyLensWidget
+  - StudyLensIntents
+  - StudyLensTests
+  - StudyLensUITests
+
+opt_in_rules:
+  - empty_count
+  - closure_spacing
+  - contains_over_filter_is_empty
+  - first_where
+  - sorted_first_last
+  - toggle_bool
+
+disabled_rules:
+  - todo
+
+line_length:
+  warning: 140
+  error: 200
+
+file_length:
+  warning: 350
+  error: 500
+
+type_body_length:
+  warning: 250
+
+function_body_length:
+  warning: 60
+
+identifier_name:
+  min_length: 2
+  excluded: [id, x, y]

@@ -1,0 +1,101 @@
+# XcodeGen project definition.
+# On macOS: `brew install xcodegen && xcodegen generate` produces StudyLens.xcodeproj.
+# The .xcodeproj is intentionally not versioned (no pbxproj merge conflicts).
+name: StudyLens
+
+options:
+  bundleIdPrefix: com.renanbambam
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  StudyLens:
+    type: application
+    platform: iOS
+    sources:
+      - path: StudyLens
+      # App Intents are compiled into the app target (Apple guidance for
+      # intents that open the app); folder kept per architecture doc.
+      - path: StudyLensIntents
+    entitlements:
+      path: StudyLens/StudyLens.entitlements
+      properties:
+        com.apple.developer.icloud-services: [CloudKit]
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.renanbambam.studylens
+        com.apple.security.application-groups:
+          - group.com.renanbambam.studylens
+        aps-environment: development
+    info:
+      path: StudyLens/Info.plist
+      properties:
+        CFBundleDisplayName: StudyLens
+        NSCameraUsageDescription: "StudyLens uses the camera to scan your notes"
+        NSPhotoLibraryUsageDescription: "StudyLens can import notes from your photo library"
+        UILaunchScreen: {}
+        CFBundleURLTypes:
+          - CFBundleURLName: com.renanbambam.studylens
+            CFBundleURLSchemes: [studylens]
+    dependencies:
+      - target: StudyLensWidget
+        embed: true
+
+  StudyLensWidget:
+    type: app-extension
+    platform: iOS
+    settings:
+      base:
+        # App extensions must be prefixed by the host app's bundle id;
+        # XcodeGen's default (…StudyLensWidget) breaks simulator install.
+        PRODUCT_BUNDLE_IDENTIFIER: com.renanbambam.StudyLens.Widget
+    sources:
+      - path: StudyLensWidget
+      # Shared snapshot model — single source of truth for App Group data.
+      - path: StudyLens/Infrastructure/Widget/WidgetDataStore.swift
+    entitlements:
+      path: StudyLensWidget/StudyLensWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.renanbambam.studylens
+    info:
+      path: StudyLensWidget/Info.plist
+      properties:
+        CFBundleDisplayName: StudyLens Widget
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+  StudyLensTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [StudyLensTests]
+    dependencies:
+      - target: StudyLens
+
+  StudyLensUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [StudyLensUITests]
+    dependencies:
+      - target: StudyLens
+
+schemes:
+  StudyLens:
+    build:
+      targets:
+        StudyLens: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - StudyLensTests
+        - StudyLensUITests
