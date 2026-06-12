@@ -1,0 +1,19 @@
+# Xcode
+*.xcodeproj
+!project.yml
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.xcresult
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Secrets — never commit API keys
+*.apikey
+.env

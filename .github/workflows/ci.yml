@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: SwiftLint
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint lint --strict --quiet
+
+  test:
+    name: Unit Tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Use the image's default Xcode: pinning an older version desyncs
+      # xcodebuild from the preinstalled simulator runtimes.
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install tools
+        run: |
+          brew install xcodegen
+          sudo gem install xcpretty
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # Runner images are inconsistent about which simulators exist, so pick
+      # any available iPhone dynamically and create one if the list is empty.
+      - name: Prepare iOS simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '[.devices[] | .[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid // empty')
+          if [ -z "$UDID" ]; then
+            RUNTIME=$(xcrun simctl list runtimes --json \
+              | jq -r '[.runtimes[] | select(.platform=="iOS" and .isAvailable)][-1].identifier // empty')
+            if [ -z "$RUNTIME" ]; then
+              echo "No iOS runtime installed; downloading platform"
+              sudo xcodebuild -downloadPlatform iOS
+              RUNTIME=$(xcrun simctl list runtimes --json \
+                | jq -r '[.runtimes[] | select(.platform=="iOS" and .isAvailable)][-1].identifier')
+            fi
+            DEVTYPE=$(xcrun simctl list devicetypes --json \
+              | jq -r '[.devicetypes[] | select(.productFamily=="iPhone")][-1].identifier')
+            echo "No simulator found; creating one ($DEVTYPE, $RUNTIME)"
+            UDID=$(xcrun simctl create "ci-iphone" "$DEVTYPE" "$RUNTIME")
+          fi
+          xcrun simctl bootstatus "$UDID" -b || xcrun simctl boot "$UDID" || true
+          echo "Using simulator $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        run: |
+          # pipefail keeps xcodebuild's real exit code through the xcpretty pipe.
+          set -o pipefail
+          xcodebuild test \
+            -project StudyLens.xcodeproj \
+            -scheme StudyLens \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty
+
+      - name: Dump crash reports
+        if: failure()
+        run: |
+          find ~/Library/Logs/DiagnosticReports -name "*.ips" -mmin -40 2>/dev/null \
+            | head -5 | while read -r f; do
+              echo "=== $f ==="
+              head -60 "$f"
+            done
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults.xcresult
